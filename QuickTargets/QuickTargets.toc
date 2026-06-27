@@ -1,7 +1,12 @@
 ## Interface: 30300
 ## Title: Quick Targets
+## Title-ruRU: Quick Targets
 ## Notes: Fast raid target marking for Wrath Classic
-## Author: Vasia
-## Version: 1.4.0
+## Notes-ruRU: Быстрая установка рейдовых меток
+## Author: Dizzlok
+## Version: 1.7.5
+## X-Website: https://ezwow.org/
 ## SavedVariables: QuickTargetsDB
+## Bindings: Bindings.xml
+Localization.lua
 QuickTargets.lua

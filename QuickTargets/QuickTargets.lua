@@ -1,3 +1,7 @@
+-- Binding header localization
+-- BINDING_HEADER_QUICKTARGETS = "Quick Targets"
+-- BINDING_NAME_QUICKTARGETS_TOGGLE = "Toggle Frame"
+
 QuickTargetsDB = QuickTargetsDB or {}
 QuickTargetsDB.locked = QuickTargetsDB.locked or false
 QuickTargetsDB.hidden = QuickTargetsDB.hidden or false
@@ -11,11 +15,10 @@ local ICON_SPACING = 4
 local BASE_WIDTH = 300
 local BASE_HEIGHT = 35
 local buttons = {}
+local L = QuickTargetsL
 
 local QT = CreateFrame("Frame", "QuickTargetsFrame", UIParent)
 QT:SetMovable(true)
-QT:EnableMouse(true)
-QT:EnableMouseWheel(true)
 QT:RegisterForDrag("LeftButton")
 QT:SetBackdrop({
     bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -43,7 +46,10 @@ local function UpdateLayout()
     QT:SetWidth(QuickTargetsDB.width)
     QT:SetHeight(QuickTargetsDB.height)
     
-    local scaleRatio = QuickTargetsDB.width / BASE_WIDTH
+    local widthScaleRatio = QuickTargetsDB.width / BASE_WIDTH
+    local heightScaleRatio = QuickTargetsDB.height / BASE_HEIGHT
+    local scaleRatio = math.min(widthScaleRatio, heightScaleRatio)
+    
     local scaledIconSize = ICON_SIZE * scaleRatio
     local scaledIconSpacing = ICON_SPACING * scaleRatio
     
@@ -65,6 +71,27 @@ local function UpdateLayout()
     end
 end
 
+local function UpdateMouseInteractions()
+    if QuickTargetsDB.locked then
+        QT:EnableMouse(false)
+        QT:EnableMouseWheel(false)
+    else
+        QT:EnableMouse(true)
+        QT:EnableMouseWheel(true)
+    end
+end
+
+-- Global toggle function for binding
+function QuickTargets_ToggleVisibility()
+    if QT:IsShown() then
+        QT:Hide()
+        QuickTargetsDB.hidden = true
+    else
+        QT:Show()
+        QuickTargetsDB.hidden = false
+    end
+end
+
 QT:SetScript("OnDragStart", function(self)
     if not QuickTargetsDB.locked then
         self:StartMoving()
@@ -77,15 +104,38 @@ QT:SetScript("OnDragStop", function(self)
 end)
 
 QT:SetScript("OnMouseWheel", function(self, delta)
-    if IsControlKeyDown() then
+    if IsControlKeyDown() and IsShiftKeyDown() and IsAltKeyDown() then
+        QuickTargetsDB.scale = QuickTargetsDB.scale + (delta * 0.05)
+        if QuickTargetsDB.scale < 0.5 then QuickTargetsDB.scale = 0.5 end
+        if QuickTargetsDB.scale > 2.0 then QuickTargetsDB.scale = 2.0 end
+        if QTScaleSlider then
+            QTScaleSlider:SetValue(QuickTargetsDB.scale)
+            if QTScaleEdit then
+                QTScaleEdit:SetText(string.format("%.1f", QuickTargetsDB.scale))
+            end
+        end
+        UpdateLayout()
+    elseif IsControlKeyDown() then
         if IsShiftKeyDown() then
             QuickTargetsDB.height = QuickTargetsDB.height + (delta * 5)
             if QuickTargetsDB.height < 20 then QuickTargetsDB.height = 20 end
             if QuickTargetsDB.height > 100 then QuickTargetsDB.height = 100 end
+            if QTHeightSlider then
+                QTHeightSlider:SetValue(QuickTargetsDB.height)
+                if QTHeightEdit then
+                    QTHeightEdit:SetText(tostring(QuickTargetsDB.height))
+                end
+            end
         else
             QuickTargetsDB.width = QuickTargetsDB.width + (delta * 10)
             if QuickTargetsDB.width < 150 then QuickTargetsDB.width = 150 end
             if QuickTargetsDB.width > 600 then QuickTargetsDB.width = 600 end
+            if QTWidthSlider then
+                QTWidthSlider:SetValue(QuickTargetsDB.width)
+                if QTWidthEdit then
+                    QTWidthEdit:SetText(tostring(QuickTargetsDB.width))
+                end
+            end
         end
         UpdateLayout()
     end
@@ -123,7 +173,7 @@ for i, marker in ipairs(RAID_TARGETS) do
     
     btn:SetScript("OnEnter", function()
         GameTooltip:SetOwner(btn, "ANCHOR_TOP")
-        GameTooltip:AddLine(marker.name)
+        GameTooltip:AddLine(L[marker.name])
         GameTooltip:Show()
     end)
     
@@ -148,103 +198,205 @@ end
 
 LockBtn:SetScript("OnClick", function()
     QuickTargetsDB.locked = not QuickTargetsDB.locked
-    QT:EnableMouse(not QuickTargetsDB.locked)
+    UpdateMouseInteractions()
     UpdateLockButton()
+    if QTLockCheck then
+        QTLockCheck:SetChecked(QuickTargetsDB.locked)
+    end
 end)
 
-local OptionsPanel = CreateFrame("Frame", "QuickTargetsOptionsPanel")
-OptionsPanel.name = "Quick Targets"
+-- Create styled slider
+local function CreateOmenSlider(parent, name, label, minValue, maxValue, defaultValue, step, xPos, yPos, width, onUpdate)
+    local frame = CreateFrame("Frame", name, parent)
+    frame:SetPoint("TOPLEFT", xPos, yPos)
+    frame:SetWidth(width)
+    frame:SetHeight(60)
+    
+    -- Label with gold color
+    local labelText = frame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    labelText:SetPoint("TOPLEFT", 0, 0)
+    labelText:SetText(label)
+    labelText:SetTextColor(1, 0.82, 0, 1)
+    
+    -- Slider
+    local slider = CreateFrame("Slider", name.."Slider", frame, "OptionsSliderTemplate")
+    slider:SetPoint("TOP", 0, -18)
+    slider:SetOrientation("HORIZONTAL")
+    slider:SetMinMaxValues(minValue, maxValue)
+    slider:SetValueStep(step)
+    slider:SetValue(defaultValue)
+    slider:SetWidth(width)
+    slider:SetHeight(16)
+    
+    -- Hide default Blizzard text
+    getglobal(slider:GetName().."Low"):Hide()
+    getglobal(slider:GetName().."High"):Hide()
+    getglobal(slider:GetName().."Text"):Hide()
+    
+    -- Min value - positioned below slider on left
+    local minText = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    minText:SetPoint("BOTTOMLEFT", 0, 2)
+    minText:SetText(tostring(minValue))
+    
+    -- Max value - positioned below slider on right
+    local maxText = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    maxText:SetPoint("BOTTOMRIGHT", 0, 2)
+    maxText:SetText(tostring(maxValue))
+    
+    -- Edit box for manual input - positioned BELOW min/max values
+    local editBox = CreateFrame("EditBox", name.."Edit", frame, "InputBoxTemplate")
+    editBox:SetSize(60, 20)
+    editBox:SetPoint("TOP", 0, -50)
+    editBox:SetAutoFocus(false)
+    editBox:SetFontObject("ChatFontNormal")
+    editBox:SetText(tostring(defaultValue))
+    
+    editBox:SetScript("OnEnterPressed", function(self)
+        local value = tonumber(self:GetText())
+        if value and value >= minValue and value <= maxValue then
+            onUpdate(value)
+            slider:SetValue(value)
+        else
+            self:SetText(tostring(slider:GetValue()))
+        end
+        self:ClearFocus()
+    end)
+    
+    editBox:SetScript("OnEscapePressed", function(self)
+        self:SetText(tostring(slider:GetValue()))
+        self:ClearFocus()
+    end)
+    
+    editBox:SetScript("OnEditFocusLost", function(self)
+        self:SetText(tostring(slider:GetValue()))
+    end)
+    
+    editBox:SetScript("OnEditFocusGained", function(self)
+        self:HighlightText()
+    end)
+    
+    slider:SetScript("OnValueChanged", function(self, value)
+        editBox:SetText(tostring(value))
+        onUpdate(value)
+    end)
+    
+    return slider, editBox
+end
 
+-- Options Panel
+local OptionsPanel = CreateFrame("Frame", "QuickTargetsOptionsPanel")
+OptionsPanel.name = L["Quick Targets"]
+
+-- Title with gold color
 local title = OptionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 title:SetPoint("TOPLEFT", 16, -16)
-title:SetText("Quick Targets")
+title:SetText(L["Quick Targets"])
+title:SetTextColor(1, 0.82, 0, 1)
 
-local scaleLabel = OptionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-scaleLabel:SetPoint("TOPLEFT", 16, -50)
-scaleLabel:SetText("Scale:")
+-- Isengard credit
+local isengardLine1 = OptionsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+isengardLine1:SetPoint("TOPLEFT", 16, -38)
+isengardLine1:SetText(L["Made for Isengard WotLK 3.3.5a"])
 
-local scaleSlider = CreateFrame("Slider", "QuickTargetsScaleSlider", OptionsPanel, "OptionsSliderTemplate")
-scaleSlider:SetPoint("TOPLEFT", 16, -70)
-scaleSlider:SetOrientation("HORIZONTAL")
-scaleSlider:SetMinMaxValues(0.5, 2.0)
-scaleSlider:SetValueStep(0.05)
-scaleSlider:SetValue(QuickTargetsDB.scale)
-scaleSlider:SetWidth(200)
-getglobal(scaleSlider:GetName().."Low"):SetText("0.5")
-getglobal(scaleSlider:GetName().."High"):SetText("2.0")
-scaleSlider:SetScript("OnValueChanged", function(self, value)
-    QuickTargetsDB.scale = value
-    UpdateLayout()
-end)
+local isengardLine2 = OptionsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+isengardLine2:SetPoint("TOPLEFT", 16, -52)
+isengardLine2:SetText("|cff4a9eff"..L["Website"].."|r")
 
-local widthLabel = OptionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-widthLabel:SetPoint("TOPLEFT", 16, -110)
-widthLabel:SetText("Width:")
+-- Control hints
+local hintTitle = OptionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+hintTitle:SetPoint("TOPLEFT", 16, -72)
+hintTitle:SetText("|cffffff00"..L["Scale"].."|r")
+hintTitle:SetTextColor(1, 0.82, 0, 1)
 
-local widthSlider = CreateFrame("Slider", "QuickTargetsWidthSlider", OptionsPanel, "OptionsSliderTemplate")
-widthSlider:SetPoint("TOPLEFT", 16, -130)
-widthSlider:SetOrientation("HORIZONTAL")
-widthSlider:SetMinMaxValues(150, 600)
-widthSlider:SetValueStep(10)
-widthSlider:SetValue(QuickTargetsDB.width)
-widthSlider:SetWidth(200)
-getglobal(widthSlider:GetName().."Low"):SetText("150")
-getglobal(widthSlider:GetName().."High"):SetText("600")
-widthSlider:SetScript("OnValueChanged", function(self, value)
-    QuickTargetsDB.width = value
-    UpdateLayout()
-end)
+local hint1 = OptionsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+hint1:SetPoint("TOPLEFT", 16, -88)
+hint1:SetText("|cffffff00Ctrl|r + |cffffff00Колёсико мыши|r - изменить ширину")
 
-local heightLabel = OptionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-heightLabel:SetPoint("TOPLEFT", 16, -170)
-heightLabel:SetText("Height:")
+local hint2 = OptionsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+hint2:SetPoint("TOPLEFT", 16, -102)
+hint2:SetText("|cffffff00Ctrl|r + |cffffff00Shift|r + |cffffff00Колёсико мыши|r - изменить высоту")
 
-local heightSlider = CreateFrame("Slider", "QuickTargetsHeightSlider", OptionsPanel, "OptionsSliderTemplate")
-heightSlider:SetPoint("TOPLEFT", 16, -190)
-heightSlider:SetOrientation("HORIZONTAL")
-heightSlider:SetMinMaxValues(20, 100)
-heightSlider:SetValueStep(5)
-heightSlider:SetValue(QuickTargetsDB.height)
-heightSlider:SetWidth(200)
-getglobal(heightSlider:GetName().."Low"):SetText("20")
-getglobal(heightSlider:GetName().."High"):SetText("100")
-heightSlider:SetScript("OnValueChanged", function(self, value)
-    QuickTargetsDB.height = value
-    UpdateLayout()
-end)
+local hint3 = OptionsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+hint3:SetPoint("TOPLEFT", 16, -116)
+hint3:SetText("|cffffff00Ctrl|r + |cffffff00Shift|r + |cffffff00Alt|r + |cffffff00Колёсико мыши|r - масштаб")
 
+-- Sliders row 1: Scale and Width
+local scaleSlider, scaleEdit = CreateOmenSlider(
+    OptionsPanel,
+    "QTScale",
+    L["Scale"],
+    0.5, 2.0, QuickTargetsDB.scale, 0.05,
+    16, -140, 200,
+    function(value)
+        QuickTargetsDB.scale = value
+        UpdateLayout()
+    end
+)
+QTScaleSlider = scaleSlider
+QTScaleEdit = scaleEdit
+
+local widthSlider, widthEdit = CreateOmenSlider(
+    OptionsPanel,
+    "QTWidth",
+    L["Width"],
+    150, 600, QuickTargetsDB.width, 10,
+    240, -140, 200,
+    function(value)
+        QuickTargetsDB.width = value
+        UpdateLayout()
+    end
+)
+QTWidthSlider = widthSlider
+QTWidthEdit = widthEdit
+
+-- Slider row 2: Height
+local heightSlider, heightEdit = CreateOmenSlider(
+    OptionsPanel,
+    "QTHeight",
+    L["Height"],
+    20, 100, QuickTargetsDB.height, 5,
+    16, -210, 200,
+    function(value)
+        QuickTargetsDB.height = value
+        UpdateLayout()
+    end
+)
+QTHeightSlider = heightSlider
+QTHeightEdit = heightEdit
+
+-- Lock checkbox
 local lockCheck = CreateFrame("CheckButton", "QuickTargetsLockCheck", OptionsPanel, "InterfaceOptionsCheckButtonTemplate")
-lockCheck:SetPoint("TOPLEFT", 16, -230)
-local lockCheckText = getglobal("QuickTargetsLockCheckText")
-if lockCheckText then
-    lockCheckText:SetText("Lock Frame")
-end
+lockCheck:SetPoint("TOPLEFT", 16, -280)
+getglobal("QuickTargetsLockCheckText"):SetText(L["Lock Frame"])
 lockCheck:SetScript("OnClick", function(self)
     QuickTargetsDB.locked = self:GetChecked()
-    QT:EnableMouse(not QuickTargetsDB.locked)
+    UpdateMouseInteractions()
     UpdateLockButton()
 end)
+QTLockCheck = lockCheck
 
 InterfaceOptions_AddCategory(OptionsPanel)
 
+-- Right-click menu
 local MenuFrame = CreateFrame("Frame", "QuickTargetsMenu", UIParent, "UIDropDownMenuTemplate")
 
 QT:SetScript("OnMouseDown", function(_, button)
     if button ~= "RightButton" then return end
     EasyMenu({
-        { text = "Quick Targets", isTitle = true, notCheckable = true },
-        { text = "Hide", notCheckable = true, func = function() QT:Hide() QuickTargetsDB.hidden = true end },
-        { text = "Options", notCheckable = true, func = function() 
+        { text = L["Quick Targets"], isTitle = true, notCheckable = true },
+        { text = L["Hide"], notCheckable = true, func = function() QuickTargets_ToggleVisibility() end },
+        { text = L["Options"], notCheckable = true, func = function() 
             InterfaceOptionsFrame_OpenToCategory(OptionsPanel) 
             InterfaceOptionsFrame_OpenToCategory(OptionsPanel) 
         end },
     }, MenuFrame, "cursor", 0, 0, "MENU")
 end)
 
+-- Init
 local InitFrame = CreateFrame("Frame")
 InitFrame:RegisterEvent("PLAYER_LOGIN")
 InitFrame:SetScript("OnEvent", function()
-    QT:EnableMouse(not QuickTargetsDB.locked)
+    UpdateMouseInteractions()
     UpdateLockButton()
     lockCheck:SetChecked(QuickTargetsDB.locked)
     UpdateLayout()
@@ -253,24 +405,19 @@ InitFrame:SetScript("OnEvent", function()
     end
 end)
 
+-- Slash commands
 SLASH_QUICKTARGETS1 = "/qt"
 SlashCmdList.QUICKTARGETS = function(msg)
     if not msg or msg == "" then
-        if QT:IsShown() then
-            QT:Hide()
-            QuickTargetsDB.hidden = true
-        else
-            QT:Show()
-            QuickTargetsDB.hidden = false
-        end
+        QuickTargets_ToggleVisibility()
     elseif msg == "lock" then
         QuickTargetsDB.locked = true
-        QT:EnableMouse(false)
+        UpdateMouseInteractions()
         UpdateLockButton()
         lockCheck:SetChecked(true)
     elseif msg == "unlock" then
         QuickTargetsDB.locked = false
-        QT:EnableMouse(true)
+        UpdateMouseInteractions()
         UpdateLockButton()
         lockCheck:SetChecked(false)
     elseif msg == "options" or msg == "opt" or msg == "config" then
@@ -286,7 +433,7 @@ SlashCmdList.QUICKTARGETS = function(msg)
         QT:SetPoint("CENTER")
         SavePosition()
         UpdateLayout()
-        QT:EnableMouse(true)
+        UpdateMouseInteractions()
         UpdateLockButton()
         lockCheck:SetChecked(false)
         QT:Show()

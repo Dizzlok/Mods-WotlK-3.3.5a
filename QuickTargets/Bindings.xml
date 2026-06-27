@@ -1,0 +1,5 @@
+<Bindings>
+    <Binding name="QUICKTARGETS_TOGGLE" header="QUICKTARGETS" category="ADDONS">
+        QuickTargets_ToggleVisibility()
+    </Binding>
+</Bindings>
