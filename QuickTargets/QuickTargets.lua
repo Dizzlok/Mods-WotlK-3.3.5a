@@ -1,8 +1,12 @@
+
 -- Binding header localization
 -- BINDING_HEADER_QUICKTARGETS = "Quick Targets"
 -- BINDING_NAME_QUICKTARGETS_TOGGLE = "Toggle Frame"
 
-QuickTargetsDB = QuickTargetsDB or {}
+-- Initialize DB immediately before anything else
+if not QuickTargetsDB then
+    QuickTargetsDB = {}
+end
 QuickTargetsDB.locked = QuickTargetsDB.locked or false
 QuickTargetsDB.hidden = QuickTargetsDB.hidden or false
 QuickTargetsDB.position = QuickTargetsDB.position or nil
@@ -251,6 +255,13 @@ local function CreateOmenSlider(parent, name, label, minValue, maxValue, default
     editBox:SetFontObject("ChatFontNormal")
     editBox:SetText(tostring(defaultValue))
     
+    -- CRITICAL: Force update text after a short delay
+    C_Timer.After(0.1, function()
+        if editBox and not editBox:HasFocus() then
+            editBox:SetText(tostring(slider:GetValue()))
+        end
+    end)
+    
     editBox:SetScript("OnEnterPressed", function(self)
         local value = tonumber(self:GetText())
         if value and value >= minValue and value <= maxValue then
@@ -276,7 +287,9 @@ local function CreateOmenSlider(parent, name, label, minValue, maxValue, default
     end)
     
     slider:SetScript("OnValueChanged", function(self, value)
-        editBox:SetText(tostring(value))
+        if editBox and not editBox:HasFocus() then
+            editBox:SetText(tostring(value))
+        end
         onUpdate(value)
     end)
     
@@ -334,6 +347,8 @@ local scaleSlider, scaleEdit = CreateOmenSlider(
 )
 QTScaleSlider = scaleSlider
 QTScaleEdit = scaleEdit
+-- Set initial value
+scaleEdit:SetText(string.format("%.1f", QuickTargetsDB.scale))
 
 local widthSlider, widthEdit = CreateOmenSlider(
     OptionsPanel,
@@ -348,6 +363,8 @@ local widthSlider, widthEdit = CreateOmenSlider(
 )
 QTWidthSlider = widthSlider
 QTWidthEdit = widthEdit
+-- Set initial value
+widthEdit:SetText(tostring(QuickTargetsDB.width))
 
 -- Slider row 2: Height
 local heightSlider, heightEdit = CreateOmenSlider(
@@ -363,6 +380,8 @@ local heightSlider, heightEdit = CreateOmenSlider(
 )
 QTHeightSlider = heightSlider
 QTHeightEdit = heightEdit
+-- Set initial value
+heightEdit:SetText(tostring(QuickTargetsDB.height))
 
 -- Lock checkbox
 local lockCheck = CreateFrame("CheckButton", "QuickTargetsLockCheck", OptionsPanel, "InterfaceOptionsCheckButtonTemplate")
@@ -395,13 +414,47 @@ end)
 -- Init
 local InitFrame = CreateFrame("Frame")
 InitFrame:RegisterEvent("PLAYER_LOGIN")
-InitFrame:SetScript("OnEvent", function()
+InitFrame:SetScript("OnEvent", function(self, event)
+    -- Ensure DB is initialized
+    QuickTargetsDB = QuickTargetsDB or {}
+    QuickTargetsDB.locked = QuickTargetsDB.locked or false
+    QuickTargetsDB.hidden = QuickTargetsDB.hidden or false
+    QuickTargetsDB.position = QuickTargetsDB.position or nil
+    QuickTargetsDB.scale = QuickTargetsDB.scale or 1.0
+    QuickTargetsDB.width = QuickTargetsDB.width or 300
+    QuickTargetsDB.height = QuickTargetsDB.height or 35
+    
     UpdateMouseInteractions()
     UpdateLockButton()
     lockCheck:SetChecked(QuickTargetsDB.locked)
     UpdateLayout()
+    
+    -- Update edit boxes with saved values
+    if QTScaleEdit then
+        QTScaleEdit:SetText(string.format("%.1f", QuickTargetsDB.scale))
+    end
+    if QTWidthEdit then
+        QTWidthEdit:SetText(tostring(QuickTargetsDB.width))
+    end
+    if QTHeightEdit then
+        QTHeightEdit:SetText(tostring(QuickTargetsDB.height))
+    end
+    
     if QuickTargetsDB.hidden then
         QT:Hide()
+    end
+end)
+
+-- Update edit boxes when options panel is shown
+OptionsPanel:HookScript("OnShow", function()
+    if QTScaleEdit then
+        QTScaleEdit:SetText(string.format("%.1f", QuickTargetsDB.scale))
+    end
+    if QTWidthEdit then
+        QTWidthEdit:SetText(tostring(QuickTargetsDB.width))
+    end
+    if QTHeightEdit then
+        QTHeightEdit:SetText(tostring(QuickTargetsDB.height))
     end
 end)
 
