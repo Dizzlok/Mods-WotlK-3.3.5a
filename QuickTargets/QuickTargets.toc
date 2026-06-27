@@ -1,0 +1,7 @@
+## Interface: 30300
+## Title: Quick Targets
+## Notes: Fast raid target marking for Wrath Classic
+## Author: Vasia
+## Version: 1.4.0
+## SavedVariables: QuickTargetsDB
+QuickTargets.lua
